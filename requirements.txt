@@ -1,0 +1,8 @@
+Flask==2.0.1
+Flask-SocketIO==5.1.1
+spotipy==2.19.0
+yt-dlp==2021.12.01
+eyed3==0.9.6
+requests==2.26.0
+python-engineio==4.3.0
+python-socketio==5.4.0
