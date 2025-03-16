@@ -1,0 +1,189 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spotify Playlist Downloader</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/tailwindcss/2.2.19/tailwind.min.css" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        .progress-bar {
+            transition: width 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <header class="text-center mb-12">
+            <h1 class="text-4xl font-bold text-green-600">Spotify Playlist Downloader</h1>
+            <p class="text-lg text-gray-600 mt-2">Download your Spotify playlists as high-quality MP3 files</p>
+        </header>
+        
+        <div class="max-w-lg mx-auto bg-white rounded-lg shadow-md p-6">
+            <form id="download-form" class="mb-6">
+                <div class="mb-4">
+                    <label for="playlist-url" class="block text-gray-700 text-sm font-bold mb-2">Spotify Playlist URL</label>
+                    <input type="text" id="playlist-url" name="playlist_url" 
+                           class="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+                           placeholder="https://open.spotify.com/playlist/..." required>
+                </div>
+                <div class="flex items-center justify-between">
+                    <button type="submit" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline">
+                        Download Playlist
+                    </button>
+                </div>
+            </form>
+            
+            <div id="download-progress" class="hidden">
+                <h3 class="text-lg font-semibold mb-2">Download Progress</h3>
+                <div class="mb-2" id="progress-status">Starting download...</div>
+                <div class="relative pt-1">
+                    <div class="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200">
+                        <div id="progress-bar" class="progress-bar shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-green-500" style="width: 0%"></div>
+                    </div>
+                </div>
+                <div id="current-track" class="text-sm text-gray-600 mb-2"></div>
+                <div id="track-counter" class="text-sm text-gray-600 mb-4"></div>
+                <div id="download-complete" class="hidden">
+                    <div class="bg-green-100 border-l-4 border-green-500 text-green-700 p-4 mb-4">
+                        <p>Download complete! Your files are ready.</p>
+                    </div>
+                    <a id="download-link" href="#" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline inline-block">
+                        Download ZIP File
+                    </a>
+                </div>
+                <div id="download-error" class="hidden">
+                    <div class="bg-red-100 border-l-4 border-red-500 text-red-700 p-4">
+                        <p id="error-message">An error occurred during download.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="mt-12 max-w-3xl mx-auto text-center text-gray-600">
+            <h2 class="text-xl font-semibold mb-4">How It Works</h2>
+            <div class="grid md:grid-cols-3 gap-4">
+                <div class="bg-white p-4 rounded shadow">
+                    <div class="text-2xl font-bold text-green-500 mb-2">1</div>
+                    <p>Paste your Spotify playlist URL in the field above</p>
+                </div>
+                <div class="bg-white p-4 rounded shadow">
+                    <div class="text-2xl font-bold text-green-500 mb-2">2</div>
+                    <p>Our system processes each track in the playlist</p>
+                </div>
+                <div class="bg-white p-4 rounded shadow">
+                    <div class="text-2xl font-bold text-green-500 mb-2">3</div>
+                    <p>Download your songs as high-quality MP3 files with full metadata</p>
+                </div>
+            </div>
+        </div>
+        
+        <footer class="mt-12 text-center text-gray-500 text-sm">
+            <p>This tool is for personal use only. Please respect copyright laws.</p>
+        </footer>
+    </div>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const form = document.getElementById('download-form');
+            const progressSection = document.getElementById('download-progress');
+            const progressBar = document.getElementById('progress-bar');
+            const progressStatus = document.getElementById('progress-status');
+            const currentTrack = document.getElementById('current-track');
+            const trackCounter = document.getElementById('track-counter');
+            const downloadComplete = document.getElementById('download-complete');
+            const downloadLink = document.getElementById('download-link');
+            const downloadError = document.getElementById('download-error');
+            const errorMessage = document.getElementById('error-message');
+            
+            // Connect to Socket.IO
+            const socket = io();
+            let sessionId = null;
+            
+            socket.on('download_progress', function(data) {
+                if (sessionId !== data.session_id) return;
+                
+                progressSection.classList.remove('hidden');
+                
+                switch (data.status) {
+                    case 'started':
+                        progressStatus.textContent = 'Download started...';
+                        break;
+                        
+                    case 'downloading':
+                        progressStatus.textContent = 'Downloading...';
+                        currentTrack.textContent = `Current: ${data.current_track}`;
+                        break;
+                        
+                    case 'progress':
+                        const percentage = data.percentage;
+                        progressBar.style.width = `${percentage}%`;
+                        progressStatus.textContent = `Processing: ${percentage}% complete`;
+                        trackCounter.textContent = `${data.completed} of ${data.total} tracks completed`;
+                        break;
+                        
+                    case 'complete':
+                        progressStatus.textContent = 'Download complete!';
+                        progressBar.style.width = '100%';
+                        downloadComplete.classList.remove('hidden');
+                        downloadLink.href = data.download_url;
+                        break;
+                        
+                    case 'error':
+                        progressStatus.textContent = 'Error occurred';
+                        downloadError.classList.remove('hidden');
+                        errorMessage.textContent = data.message;
+                        break;
+                }
+            });
+            
+            form.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const playlistUrl = document.getElementById('playlist-url').value;
+                
+                if (!playlistUrl) {
+                    alert('Please enter a Spotify playlist URL');
+                    return;
+                }
+                
+                // Reset UI
+                progressBar.style.width = '0%';
+                currentTrack.textContent = '';
+                trackCounter.textContent = '';
+                downloadComplete.classList.add('hidden');
+                downloadError.classList.add('hidden');
+                progressSection.classList.remove('hidden');
+                progressStatus.textContent = 'Starting download...';
+                
+                // Send request to start download
+                fetch('/start_download', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                    },
+                    body: new URLSearchParams({
+                        'playlist_url': playlistUrl
+                    })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        sessionId = data.session_id;
+                    } else {
+                        progressStatus.textContent = 'Error occurred';
+                        downloadError.classList.remove('hidden');
+                        errorMessage.textContent = data.error;
+                    }
+                })
+                .catch(error => {
+                    progressStatus.textContent = 'Error occurred';
+                    downloadError.classList.remove('hidden');
+                    errorMessage.textContent = 'Network error. Please try again.';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
